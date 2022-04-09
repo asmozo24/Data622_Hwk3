@@ -1,0 +1,826 @@
+---
+title: "Data622_HWk2"
+author: "Alexis Mekueko"
+date: "3/30/2022"
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r load-packages, results='hide',warning=FALSE, message=FALSE, echo=FALSE}
+
+##library(tidyverse) #loading all library needed for this assignment
+
+
+library(knitr)
+library(dplyr)
+library(tidyr)
+
+library(stats)
+library(statsr)
+library(GGally)
+library(pdftools)
+library(correlation)
+library(naniar)
+
+library(urca)
+library(tsibble)
+library(tseries)
+library(forecast)
+library(caret)
+set.seed(34332)
+library(plyr)
+library(arules)
+library(arulesViz)
+library(report)
+library(cluster) # to perform different types of hierarchical clustering
+# package functions used: daisy(), diana(), clusplot()
+#install.packages("visdat")
+library(visdat)
+library(plotly)
+library(reshape2)
+library(mlbench)
+library(corrplot)
+library(pROC)
+library(prodlim)
+
+library(DataExplorer)
+library(MASS)
+
+
+```
+
+
+
+
+[Github Link](https://github.com/asmozo24/Data622_HWK2)
+<br>
+[Web Link](https://rpubs.com/amekueko/885406)
+
+
+## Assignment:
+
+Based on the latest topics presented, bring a dataset of your choice and create a Decision Tree where you can solve a classification or regression problem and predict the outcome of a particular feature or detail of the data used.
+Switch variables to generate 2 decision trees and compare the results. Create a random forest for regression and analyze the results.
+Based on real cases where desicion trees went wrong, and 'the bad & ugly' aspects of decision trees (https://decizone.com/blog/the-good-the-bad-the-ugly-of-using-decision-trees), how can you change this perception when using the decision tree you created to solve a real problem? Format: document with screen captures & analysis.
+
+
+
+## Import Data and Data Structure
+
+We imported the data from local drive. Another option could be to load the date from Github.
+ 
+```{r, echo=FALSE}
+
+# Loading data
+loanDF <- read.csv("Loan.csv", stringsAsFactors=FALSE)
+
+#write.csv(loanDF, file = "Loan.csv", quote = F, row.names = F)
+
+#View(loanDF)
+#glimpse(loanDF)
+
+str(loanDF)
+
+loanDF %>%
+  head(8)%>%
+  kable()
+
+``` 
+
+----------------------------------------------------------------------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------------------------------------------------------------------
+
+##### Dataset Description
+
+
+Variables ========== Descriptions
+
+Loan_ID   ========== Unique Loan ID
+
+Gender   =========== Male/Female
+
+Married  =========== Appliquant marital status (Y/N)
+
+Dependents ========= Number of dependents
+
+Education ========== Applicant Education (Graduate/Undergraduate)
+
+Self_Employed ====== Self_employed (Y/N)
+
+ApplicantIncome ==== Applicant income
+
+CoapplicantIncome == Coapplicant income
+
+LoanAmount ========= Loan amount in thousands dollars
+
+Loan_Amount_Term === Term of loan in months
+
+Credit_History ===== Credit history meets guidelines
+
+Property_Area ====== Urban, semi-urban, rural
+
+Loan_Status ======== Loan approved (Y/N)
+
+
+
+This dataset is a typical format which banks use to screen/select applicant for a loan. There 614 records with 13 variables. The datatypes in this dataset are mostly character and numerical. There are some variables (Loan_Status,Self_Employed, Married,Dependents etc) with characters datatype that should be factor with two levels (yes/no or 0/1). The variable "Credit_History" should be in term of number of years. We assume the bank uses '1' to say the customer meets the minimum number of years to qualify for a loan and '0' for those who don't meet the minimum years. Normally, a customer with a credit history = 0 should be denied a loan. Is it true on this bank record? Answer is no. Therefore the decision to approve a loan for a customer relies on the combination with other variables other than the dependent/target 'Loan_Status'. Based on the information about the structure of the dataset, we can conclude that we have a labeled data. Therefore, we can be confident in using supervised learning on this dataset. As we know, supervised learning model account for a classification model and we will predict the state of client loan approval. 
+
+
+## Cleaning Data
+
+```{r }
+
+
+#install.packages('Amelia')
+#install.packages('DataExplorer')
+
+library(Amelia)
+#sum(is.na(loanDF))
+misValues <- sum(is.na(loanDF))# Returning the column names with missing values
+
+#sum(is.na(basket1a$X.1))
+#misValues1 <- sum(is.na()
+# Filling the empty spece with "NA"
+#us_d <- dplyr::na_if(us_d, "")
+#is.null(us_d)
+#if (is.na(us_d)|| us_d== '')
+#is.empty(" ")
+#apply(myData, 2, function(myCol){  sum(myCol == "1") > 0
+  
+emptyValue <- sum(emptyValue <- sapply(loanDF, function(x) all(is.na(x) | x == '' )) ) 
+
+cat("The dataset contains missing values for a total record of : " , misValues)
+print("\n")
+cat("The dataset contains empty values for a total record of : " , emptyValue)
+
+missmap(loanDF,col=c('yellow','black'),y.at=1,y.labels=' ',legend=TRUE)
+#count(loanDF$Credit_History)
+
+```
+
+The plot of missing values shows that there are definitely missing values(86 records) withing the dataset. Let's take a look at this missing values. 
+
+```{r }
+
+
+library(VIM)
+#aggr(loanDF)
+#vis_miss(loanDF)
+
+
+
+missing.values <- function(df){
+    df %>%
+    gather(key = "variables", value = "val") %>%
+    mutate(is.missing = is.na(val)) %>%
+    group_by(variables, is.missing) %>%
+    dplyr::summarise(number.missing = n()) %>%
+    filter(is.missing==T) %>%
+    dplyr::select(-is.missing) %>%
+    arrange(desc(number.missing)) 
+}
+
+missing.values(loanDF)%>%
+  kable()
+
+library(DataExplorer)
+plot_missing(loanDF)
+
+#gg_miss_upset(loanDF)
+
+# dev.off()
+# print(plot(1))
+
+
+#count((data1000R$Order.Priority))
+
+#sum(is.na(data1000R$Order.Priority))
+# Not sure why the code below does not work
+# data1000R %>% 
+#   group_by(data1000R$Order.Priority) %>%
+#   summarize(Count=n()) %>%
+#   mutate(Percent = (Count/sum(Count))*100) %>%
+#   arrange(desc(Count))
+
+```
+
+The missing values are present in these variables (Loan_Amount_Term, LoanAmount and Credit_History). Since the dataset is a small in size, deleting these missing values will reduce the dataset. Instead of deleting, we can apply imputation on these missing values.
+
+```{r }
+
+
+#if (is.na(loanDF$Self_Employed) || loanDF$Self_Employed == '')
+count(loanDF$Gender)
+
+count(loanDF$Married)
+count(loanDF$Self_Employed)
+count(loanDF$Credit_History)
+
+print("The above frequency distribution shows that there are 04 variable with some blank/empty values")
+#loanDF$Gender[loanDF$Gender==""]<-NA
+#loanDF[loanDF==""]<- c('NA')
+
+# Works but does not fix the issue with blanks value
+#loanDF <- loanDF %>% 
+#                 mutate_all(na_if,"")
+
+# Works but does not fix the issue with blank value
+## define a empty function
+# empty_as_na <- function(x){
+#     if("factor" %in% class(x)) x <- as.character(x) ## since ifelse won't work with factors
+#     ifelse(as.character(x)!="", x, NA) <NA>
+# }
+
+# Works but the issue with blank value is still present
+## transform all columns
+#loanDF %>% 
+#  mutate_each(funs(empty_as_na))
+
+#loanDF[loanDF=="NA"]<- c('<NA>')
+#loanDF <- loanDF %>%
+#   mutate(across(everything(), ~ifelse(.=="", NA, as.character(.))))
+
+
+print("\n")
+print("Let's see if sum of missing values will cath these blank values since we applied a function earlier to account for this issue")
+
+print("\n")
+
+cat("Sum of missing values within variable = Credit_History is:  ", sum(is.na(loanDF$Credit_History)))
+
+print("\n")
+
+cat("Sum of missing values within variable = Gender is:  ", sum(is.na(loanDF$Gender)))
+
+print("\n")
+
+cat("Sum of missing values within variable = Self_Employed is:  ", sum(is.na(loanDF$Self_Employed)))
+
+print("\n")
+
+cat("Sum of missing values within variable = Married is:  ", sum(is.na(loanDF$Married)))
+print("\n")
+
+#View(loanDF)
+
+```
+
+
+Somehow there are some empty values. These aren't easy to check because the mapping of missing values above missed them.
+We will fill in the empty/blank values with 'NA'. Then, check again before performing imputation. 
+
+
+```{r }
+
+#loanDF <- read.csv("Loan.csv", header=T, na.strings=c("",'NA'))
+
+#loanDF$Gender[loanDF$Gender == " "]<- NA
+# loanDF$Gender[loanDF$Gender == ""  | loanDF$Gender== " "] <- NA 
+# loanDF$Dependents[loanDF$Dependents == ""  | loanDF$Dependents== " "] <- NA 
+# loanDF$Self_Employed[loanDF$Self_Employed == ""  | loanDF$Self_Employed== " "] <- NA 
+# loanDF$Married[loanDF$Married == ""  | loanDF$Married== " "] <- NA 
+
+#loanDF$Self_Employed[is.na(loanDF$Self_Employed)] <- mean(loanDF$Self_Employed, na.rm = TRUE)
+
+#if (!require("tidyverse")) install.packages("tidyverse")
+
+# loanDF %>% 
+#   mutate(Gender = if_else(is.na(Gender), 
+#                          calc_mode(Gender), 
+#                          Gender))
+# 
+# calc_mode <- function(x){
+#   
+#   # List the distinct / unique values
+#   distinct_values <- unique(x)
+#   
+#   # Count the occurrence of each distinct value
+#   distinct_tabulate <- tabulate(match(x, distinct_values))
+#   
+#   # Return the value with the highest occurrence
+#   distinct_values[which.max(distinct_tabulate)]
+# }
+# 
+# 
+# loanDF %>% 
+#   mutate(across(everything(), ~replace_na(.x, calc_mode(.x))))
+
+# 
+# getmode <- function(v){
+#   v=v[nchar(as.character(v))>0]
+#   uniqv <- unique(v)
+#   uniqv[which.max(tabulate(match(v, uniqv)))]
+# }
+# 
+# for (cols in colnames(df)) {
+#   if (cols %in% names(df[,sapply(df, is.numeric)])) {
+#     df<-df%>%mutate(!!cols := replace(!!rlang::sym(cols), is.na(!!rlang::sym(cols)), mean(!!rlang::sym(cols), na.rm=TRUE)))
+#      
+#   }
+#   else {
+#      
+#     df<-df%>%mutate(!!cols := replace(!!rlang::sym(cols), !!rlang::sym(cols)=="", getmode(!!rlang::sym(cols))))
+#      
+#   }
+# }
+#  
+# df
+
+
+# The above attempts work but somehow the issue is still persisting. This time , we are going to try prof-fix
+
+loanDF$Married <- loanDF$Married %>% replace_na("NA")
+
+loanDF$Gender <- loanDF$Gender %>% replace_na("NA")
+
+loanDF$Dependents <- loanDF$Dependents %>% replace_na("NA")
+
+loanDF$Self_Employed <- loanDF$Self_Employed %>% replace_na("NA")
+
+
+count(loanDF$Gender)
+count(loanDF$Self_Employed)
+count(loanDF$Credit_History)
+count(loanDF$Married)
+
+print("\n")
+
+cat("Sum of missing values within variable = Credit_History is:  ", sum(is.na(loanDF$Credit_History)))
+
+print("\n")
+
+cat("Sum of missing values within variable = Gender is:  ", sum(is.na(loanDF$Gender)))
+
+print("\n")
+
+cat("Sum of missing values within variable = Self_Employed is:  ", sum(is.na(loanDF$Self_Employed)))
+
+print("\n")
+
+cat("Sum of missing values within variable = Married is:  ", sum(is.na(loanDF$Married)))
+print("\n")
+#View(loanDF)
+
+```
+
+
+let's perform imputation.
+
+```{r }
+
+#df[!(is.na(df$start_pc) | df$start_pc==""), ]
+#df <- with(df, df[!(start_pc == "" | is.na(start_pc)), ])
+#test for non-zero string length using nzchar.
+#df <- with(df, df[!(nzchar(start_pc) | is.na(start_pc)), ])
+
+#loanDF1 <- loanDF1[-which(loanDF1$Gender == ""), ]
+
+
+library(mice)
+imputed <- mice(loanDF, m=2, maxit = 2, method = 'cart', seed = 23321)
+#mice = multiple imputation by chained equations. The 'm' argument = number of rounds of imputation
+#CART = classification and regression trees
+loanDF1<- complete(imputed,2) #here I chose the second round of data imputation
+
+missmap(loanDF1,col=c('yellow','black'),y.at=1,y.labels=' ',legend=TRUE)
+str(loanDF1)
+#library(stringi)
+#stri_isempty(loanDF1$Self_Employed)
+
+
+# loanDF1$Married <- loanDF1$Married %>% replace_na("NA")
+# 
+# loanDF$Gender <- loanDF$Gender %>% replace_na("NA")
+# 
+# loanDF$Dependents <- loanDF$Dependents %>% replace_na("NA")
+# 
+# loanDF$Self_Employed <- loanDF$Self_Employed %>% replace_na("NA")
+
+#is.null(loanDF1$Gender)
+# Checking for empty value again
+count(loanDF1$Gender)
+count(loanDF1$Married)
+
+
+```
+
+
+We clearly see that there is no more missing data. But there are persisting issue with blank values. 
+
+## Processing Data
+
+Let's remove the variables that we don't need for the decision trees model. Then, we will reformat the dataset into a new data frame in which some variables (Married,Dependents,Self_Employed,Credit_History and Loan_Status). 
+
+
+```{r }
+
+loanDF1$Loan_ID <- NULL
+str(loanDF1)
+
+
+```
+
+
+
+<!-- ```{r } -->
+<!-- library(data.table) -->
+<!-- #is.null(loanDF1) -->
+<!-- # We want to check which item is popular. -->
+<!-- data2 <- data.table( ItemType = data1000R$Item.Type) -->
+<!-- data2[,.(count = .N), by = ItemType][, percent := prop.table(count)*100][] -->
+
+<!-- #installed.packages('skimr') -->
+<!-- library(skimr) -->
+<!-- loanDF1[sapply(loanDF1, is.character)] <- lapply(loanDF1[sapply(loanDF1, is.character)], as.factor) -->
+<!-- skimr::skim(loanDF1) -->
+
+<!-- ``` -->
+
+
+### Summary and Correlation
+
+This is a summary and correlation of the popular item known as "Beverage"
+
+```{r }
+
+summary(loanDF1)
+
+#library(psych)
+
+#describe(loanDF1$Self_Employed)
+par(mfrow=c(2,3))
+corr1 <- table(loanDF1$Loan_Status, loanDF1$Gender)
+barplot(corr1, main="Loan Status by Gender",
+        xlab="Gender", col=c("darkgrey","green"),
+        legend = rownames(corr1))
+
+corr2 <- table(loanDF1$Loan_Status, loanDF1$Education)
+barplot(corr2, main="Loan Status by Education",
+        xlab="Education", col=c("darkgrey","blue"),
+        legend = rownames(corr2))
+corr3 <- table(loanDF1$Loan_Status, loanDF1$Married)
+barplot(corr3, main="Loan Status by Married",
+        xlab="Married", col=c("darkgrey","red"),
+        legend = rownames(corr3))
+corr4 <- table(loanDF1$Loan_Status, loanDF1$Self_Employed)
+barplot(corr4, main="Loan Status by Self Employed",
+        xlab="Self_Employed", col=c("darkgrey","yellow"),
+        legend = rownames(corr4))
+corr5 <- table(loanDF1$Loan_Status, loanDF1$Property_Area)
+barplot(corr5, main="Loan Status by Property_Area",
+        xlab="Property_Area", col=c("black","maroon"),
+        legend = rownames(corr5))
+corr6 <- table(loanDF1$Loan_Status, loanDF1$Credit_History)
+barplot(corr6, main="Loan Status by Credit_History",
+        xlab="Credit_History", col=c("darkgrey","maroon"),
+        legend = rownames(corr6))
+
+
+
+#as.numeric(data1000R1$Units.Sold)
+#library(Hmisc)
+#data1 <- data.frame(data1000R1)
+#cor(loanDF1)
+#cor(data1000R1[,unlist(lapply(data1000R1, is.numeric))])
+#rcorr(as.matrix(data1000R1), type = "Pearson")
+
+```
+
+The assumption that we made early came out to be false. We see that there is a few percentage of customers getting loan approved despite the fact that they did not meet the minimum years of credit history. Therefore, the loan_status decision is based on other variables than credit_history. By curiousity, we also checked loan approval by gender and found out men dominate in applying for a loan. We wonder how would bank interprets this result. Perhaps, the workforce in the area is predominantly men power. Let's see how Married families do versus the non-married. The result is somewhat we would anticipate it right. Married families get more loan approved than non-married. More results shows that the bank trusts more graduate customers than those with no graduate degree. In addition, self-employed customers seem to not getting loan approval. One explanation could be that there are more employed customers than self-employed ones in the area. 
+
+These results still show the blanks values.
+
+Let's see Loan approval, applicant income and loan amount distributions
+
+```{r, echo=FALSE}
+
+library(ggplot2)
+
+par(mfrow=c(2,3))
+
+barplot(table(loanDF1$Loan_Status), main = "Loan Status Distribution ", xlab = "Loan Status , Y = approved, N = Denied", col = c("#d94701", "#238b45")) 
+
+
+hist(loanDF1$LoanAmount, 
+     main="Histogram for Loan Amount", 
+     xlab="Loan Amount", 
+     border="black", 
+     col="blue",
+     las=1, 
+     breaks=20, prob = TRUE)
+
+
+hist(loanDF1$ApplicantIncome, 
+     main="Histogram for Applicant Income", 
+     xlab="Income", 
+     border="black", 
+     col="green",
+     las=1, 
+     breaks=30, prob = TRUE)
+
+
+data(loanDF1, package="lattice")
+ggplot(data=loanDF1, aes(x=LoanAmount, fill=Education)) +
+  geom_density() +
+  facet_grid(Education~.)
+
+
+
+#, width = c(0.4,0.1) ) #~ student_math$studytime ) #, student_math$sex)
+#boxplot(Var2~school, data = student_math, xlab = "GP = Gabriel Pereira School, MS = Mousinho da Silveira School", ylab = "Number of Students", main = "Students Enrolled in Math Course" , col = c("green","purple"))
+```
+
+We observed right skewed distribution with some outliers. One way to deal with outliers is to delete if there aren't many. This method might have bad effect on the rest of the data since this is a small dataset. Since the imputation by classification and regression trees (cart) does not fix the blank values, we want to try one more method, random forest (rf), then we will tranform character variables into factors.
+
+```{r message=FALSE, warning=FALSE}
+
+imputed <- mice(loanDF1, maxit = 0)
+predicts <- imputed$predictorMatrix
+
+imputed <- mice(loanDF1, method = 'rf', predictorMatrix = predicts, m=2)
+loanDF1 <- complete(imputed)
+count(loanDF1$Gender)
+
+data(loanDF1, package="lattice")
+ggplot(data=loanDF1, aes(x=CoapplicantIncome, fill=Education)) +
+  geom_density() +
+  facet_grid(Education~.)
+
+data(loanDF1, package="lattice")
+ggplot(data=loanDF1, aes(x=CoapplicantIncome, fill=Property_Area)) +
+  geom_density() +
+  facet_grid(Property_Area~.)
+
+
+loanDF1$Gender <- as.factor(loanDF1$Gender)
+loanDF1$Married <- as.factor(loanDF1$Married)
+loanDF1$Dependents <- as.factor(loanDF1$Dependents)
+loanDF1$Education <- as.factor(loanDF1$Education)
+loanDF1$Self_Employed <- as.factor(loanDF1$Self_Employed)
+loanDF1$Property_Area <- as.factor(loanDF1$Property_Area)
+loanDF1$Credit_History <- as.factor(loanDF1$Credit_History)
+loanDF1$Loan_Status <- as.factor(loanDF1$Loan_Status)
+
+
+
+
+str(loanDF1)
+
+```
+
+ 
+
+
+
+## Building Model1 Decision Trees
+
+
+```{r }
+library(caTools)
+library(party)
+
+loanDF2 <- loanDF1 %>%
+                   dplyr::select(Gender, Married, Dependents, Education, Self_Employed, Property_Area, Credit_History, Loan_Status)
+
+data1 = sample.split(loanDF2, SplitRatio = 0.80)
+train1 <- subset(loanDF2, data1 == TRUE)
+test1 <- subset(loanDF2, data1 == FALSE)
+model1 <- ctree(Loan_Status ~ ., train1)
+plot(model1)
+
+```
+
+### Prediction of model1
+
+```{r }
+pred1 <- predict(model1, test1)
+classifier1 <- table(test1$Loan_Status, pred1)
+classifier1
+
+```
+
+### Accuracy of Model 1
+
+```{r }
+accuracy1 <- sum(diag(classifier1))/sum(classifier1)
+accuracy1
+
+#str(loanDF2)
+
+# # load package
+# #install.packages("ggstatsplot")
+# library(ggstatsplot)
+# 
+# # correlogram
+# ggstatsplot::ggcorrmat(
+#   data = data1000R1,
+#   type = "parametric", # parametric for Pearson, nonparametric for Spearman's correlation
+#   colors = c("darkred", "white", "steelblue") # change default colors
+# )
+```
+
+Let's try rpart function
+
+```{r }
+library(rpart)
+library(rpart.plot)
+library(caret)
+
+model2 <- rpart(Loan_Status ~.,method="class", data=train1)
+
+rpart.plot(model2, tweak =1.6)
+
+model2.pred <- predict(model2, test1, type="class")
+model2.accuracy <- table(test1$Loan_Status, model2.pred, dnn=c("Actual", "Predicted"))
+model2.accuracy
+
+confusionMatrix(predict(model2, type = "class"), train1$Loan_Status)
+
+# set.seed(232)
+# 
+# library(caTools)
+# data1000R1s <- sample.split(data1000R1, SplitRatio = 0.70)
+# train1 <- subset(data1000R1, data1000R1s == TRUE)
+# test1 <- subset(data1000R1, data1000R1s == FALSE)
+# 
+# model1 <- lm(Total.Profit~., train1)
+# summary(model1)
+# plot (model1, which = 2)
+# 
+# plot (model1, which = 1)
+
+```
+
+## Model3 Random Forest
+
+```{r }
+library(randomForest)
+
+model3 <- randomForest(Loan_Status ~., data = train1, importance = TRUE, ntree=500)
+print(model3)
+
+varImp(model3)
+varImpPlot(model3)
+
+#importance(model3, type = 2)
+
+pred3 <- predict(model3, test1)
+model3.accuracy <- table(test1$Loan_Status, pred3, dnn = c("actual", "predicted"))
+model3.accuracy
+conf_matrix_RF <- confusionMatrix(pred3, test1$Loan_Status)
+conf_matrix_RF
+
+```
+
+
+## Summary of model performance
+
+```{r }
+
+library(kableExtra)
+decision_tree_model <- confusionMatrix(table(model2.pred, test1$Loan_Status))$byClass
+decision_tree_accuracy <- confusionMatrix(table(model2.pred, test1$Loan_Status))$overall['Accuracy']
+decision_tree_model <- data.frame(decision_tree_model)
+decision_tree_model <- rbind("Accuracy" = decision_tree_accuracy, decision_tree_model)
+
+
+randomForest_model <- confusionMatrix(table(pred3, test1$Loan_Status))$byClass
+randomforest_accuracy <- confusionMatrix(table(pred3, test1$Loan_Status))$overall['Accuracy']
+randomForest_model <- data.frame(randomForest_model)
+randomForest_model <- rbind("Accuracy" = randomforest_accuracy, randomForest_model)
+
+summary_dt_rf <- data.frame(decision_tree_model, randomForest_model)
+
+summary_dt_rf %>% 
+              kable() %>% 
+                     kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive")) 
+
+
+
+
+```
+
+
+The performance of the decision trees and random forest models appears to be about the same. We wonder if we didn't assign the same variable twice. Nonetheless, the code looks good and we calling the random forest and decision trees function. Perhaps the explanation is on the rpart() function ...meaning we get the same result with RandomForest().
+Let's switch the target variable and see if we still get the same result.
+
+
+```{r }
+
+str(loanDF2)
+
+```
+
+Credit history sounds appropriate for a target variable, let's say the bank want to predict if a customer requesting for a new loan based on the pre-existing conditions as described in the dataset met the minimum years loan qualification.
+
+
+## Model4 Decision Tree
+```{r }
+library(caTools)
+library(party)
+
+loanDF2 <- loanDF1 %>%
+                   dplyr::select(Gender, Married, Dependents, Education, Self_Employed, Property_Area, Credit_History, Loan_Status)
+
+data2 = sample.split(loanDF2, SplitRatio = 0.80)
+train2 <- subset(loanDF2, data2 == TRUE)
+test2 <- subset(loanDF2, data2 == FALSE)
+model4 <- ctree(Credit_History ~ ., train2)
+plot(model4)
+
+```
+
+### Prediction of model4
+
+```{r }
+pred4 <- predict(model4, test2)
+classifier2 <- table(test2$Credit_History, pred4)
+classifier2
+
+```
+
+### Accuracy of Model4
+
+```{r }
+accuracy1 <- sum(diag(classifier2))/sum(classifier2)
+accuracy1
+
+#str(loanDF2)
+
+# # load package
+# #install.packages("ggstatsplot")
+# library(ggstatsplot)
+# 
+# # correlogram
+# ggstatsplot::ggcorrmat(
+#   data = data1000R1,
+#   type = "parametric", # parametric for Pearson, nonparametric for Spearman's correlation
+#   colors = c("darkred", "white", "steelblue") # change default colors
+# )
+```
+
+## Model4 Random Forest
+
+```{r }
+library(randomForest)
+
+model5 <- randomForest(Credit_History ~., data = train2, importance = TRUE, ntree=500)
+print(model5)
+
+varImp(model5)
+varImpPlot(model5)
+
+#importance(model3, type = 2)
+
+pred5 <- predict(model5, test2)
+model5.accuracy <- table(test2$Credit_History, pred5, dnn = c("actual", "predicted"))
+model5.accuracy
+conf_matrix_RF <- confusionMatrix(pred5, test2$Credit_History)
+conf_matrix_RF
+
+```
+
+
+
+## Summary of model (Credit History as a target) performance
+
+```{r }
+
+library(kableExtra)
+decision_tree_model <- confusionMatrix(table(pred4, test2$Credit_History))$byClass
+decision_tree_accuracy <- confusionMatrix(table(pred4, test2$Credit_History))$overall['Accuracy']
+decision_tree_model <- data.frame(decision_tree_model)
+decision_tree_model <- rbind("Accuracy" = decision_tree_accuracy, decision_tree_model)
+
+
+randomForest_model <- confusionMatrix(table(pred5, test2$Credit_History))$byClass
+randomforest_accuracy <- confusionMatrix(table(pred5, test2$Credit_History))$overall['Accuracy']
+randomForest_model <- data.frame(randomForest_model)
+randomForest_model <- rbind("Accuracy" = randomforest_accuracy, randomForest_model)
+
+summary_dt_rf <- data.frame(decision_tree_model, randomForest_model)
+
+summary_dt_rf %>% 
+              kable() %>% 
+                     kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive")) 
+
+
+
+
+```
+
+This time based on model accuracy , decision tree wins over random forest. We wonder if the different in the performance between the two models is not due to the fact we used ctree() function for the decision tree model. In addition, there is also the possibility of some biais because the dataset is not all clean(blank values present)
+
+
+
+
+
+
