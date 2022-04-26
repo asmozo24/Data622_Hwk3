@@ -1,0 +1,510 @@
+---
+title: "Data622_Hwk3"
+author: "Alexis Mekueko"
+date: '2022-04-08'
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+
+
+```{r load-packages, results='hide',warning=FALSE, message=FALSE, echo=FALSE}
+
+##library(tidyverse) #loading all library needed for this assignment
+
+
+library(knitr)
+library(dplyr)
+library(tidyr)
+
+library(stats)
+library(statsr)
+library(GGally)
+library(pdftools)
+library(correlation)
+library(naniar)
+
+library(urca)
+library(tsibble)
+library(tseries)
+library(forecast)
+library(caret)
+set.seed(55332)
+library(plyr)
+library(arules)
+library(arulesViz)
+library(report)
+library(cluster) # to perform different types of hierarchical clustering
+# package functions used: daisy(), diana(), clusplot()
+#install.packages("visdat")
+library(visdat)
+library(plotly)
+library(reshape2)
+library(mlbench)
+library(corrplot)
+library(pROC)
+library(prodlim)
+
+library(DataExplorer)
+library(MASS)
+
+
+```
+
+
+
+
+[Github Link](https://github.com/asmozo24/Data622_Hwk3)
+<br>
+[Web Link](https://rpubs.com/amekueko/894205)
+
+
+## Assignment:
+
+Perform an analysis of the dataset used in Homework #2 using the SVM algorithm.Compare the results with the results from previous homework. Based on articles
+https://www.hindawi.com/journals/complexity/2021/5550344/
+https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8137961/
+Search for academic content (at least 3 articles) that compare the use of decision trees vs SVMs in your current area of expertise.
+Which algorithm is recommended to get more accurate results? Is it better for classification or regression scenarios? Do you agree with the recommendations? Why?
+
+We will skip the Exploratory Data Analysis (EDA) that was done in the precedent assignment. we will bring the clean dataset and build the model on Support Vector Machine (SVM) Algorithm. 
+
+We imported the data from local drive. Another option could be to load the date from Github.
+ 
+```{r, echo=FALSE}
+
+# Loading data
+loanDF3 <- read.csv("Loan_SVM2.csv", stringsAsFactors=FALSE)
+
+#write.csv(loanDF3, file = "Loan_SVM2.csv", quote = F, row.names = F)
+
+#View(loanDF)
+#glimpse(loanDF)
+loanDF3$Loan_Status <- ifelse(loanDF3$Loan_Status == "Y", 1 , 0) 
+loanDF3$Loan_Status <- as.factor(loanDF3$Loan_Status)
+
+str(loanDF3)
+head(loanDF3)
+
+#Distribution of the target variable "Loan_Status"
+table(loanDF3$Loan_Status)
+summary(loanDF3)
+#loanDF3 %>%
+#  head(8)%>%
+#  kable()
+
+
+``` 
+
+
+
+Let's see Loan approval, applicant income and loan amount distributions
+
+```{r, echo=FALSE}
+
+library(ggplot2)
+
+par(mfrow=c(2,3))
+
+cat("Let's visualize the Loan Status Distribution")
+print("\n")
+
+barplot(table(loanDF3$Loan_Status), main = "Loan Status Distribution ", xlab = "Loan Status , Y = approved, N = Denied", col = c("#d94701", "#238b45")) 
+
+cat("Let's visualize the loan amount distribution")
+
+hist(loanDF3$LoanAmount, 
+     main="Histogram for Loan Amount", 
+     xlab="Loan Amount", 
+     border="black", 
+     col="blue",
+     las=1, 
+     breaks=20, prob = TRUE)
+
+print("\n")
+cat("Let's visualize the applicant income distribution")
+
+hist(loanDF3$ApplicantIncome, 
+     main="Histogram for Applicant Income", 
+     xlab="Income", 
+     border="black", 
+     col="green",
+     las=1, 
+     breaks=30, prob = TRUE)
+
+hist(loanDF3$Loan_Amount_Term, 
+     main="Histogram for Applicant Income", 
+     xlab="Income", 
+     border="black", 
+     col="green",
+     las=1, 
+     breaks=30, prob = TRUE)
+
+
+hist(loanDF3$CoapplicantIncome, 
+     main="Histogram for Applicant Income", 
+     xlab="Income", 
+     border="black", 
+     col="green",
+     las=1, 
+     breaks=30, prob = TRUE)
+
+# cat("Let's visualize how loan amount is distributed by education")
+# print("\n")
+# 
+# data(loanDF3, package="lattice")
+# ggplot(data=loanDF3, aes(x=LoanAmount, fill=Education)) +
+#   geom_density() +
+#   facet_grid(Education~.)
+# 
+# cat("Let's visualize how loan amount is distributed by gender")
+# print("\n")
+# 
+# data(loanDF1, package="lattice")
+# ggplot(data=loanDF1, aes(x=LoanAmount, fill=Gender )) +
+#   geom_density() +
+#   facet_grid(Gender~.)
+# 
+# cat("Let's visualize how loan amount is distributed by distribution")
+# print("\n")
+# 
+# data(loanDF1, package="lattice")
+# ggplot(data=loanDF1, aes(x=LoanAmount, fill=Property_Area )) +
+#   geom_histogram() +
+#   facet_grid(Property_Area~.)
+
+
+
+```
+
+The features are mostly right skewed distribution. The income-variable shows an abnormal distribution. Despite the median being low, loan status shows more applicants get approved. If this approval was based only on credit score, we could say the bank probably considering low score or the bank just lower the requirements to meet to get more people.
+
+
+## Visualizing Linearity Amount Features 
+
+```{r , visualize}
+plot(loanDF3)
+lines(lowess(loanDF3))
+
+
+```
+
+We barely see linearity amount these variables.
+
+Another way to visualize these variables in a x-y plane.
+
+```{r, plotting more variables}
+
+# plot the first curve by calling plot() function
+# First curve is plotted
+
+plot(loanDF3$Loan_Amount_Term, loanDF3$ApplicantIncome, type="o", col="blue", pch="o", lty=1, ylim=c(0,30000), ylab="Features" )
+points(loanDF3$Loan_Amount_Term, loanDF3$CoapplicantIncome, col="red", pch="*")
+lines(loanDF3$Loan_Amount_Term, loanDF3$CoapplicantIncome, col="red",lty=2)
+points(loanDF3$Loan_Amount_Term, loanDF3$LoanAmount, col="dark red",pch="+")
+lines(loanDF3$Loan_Amount_Term, loanDF3$LoanAmount, col="dark red", lty=3)
+# Adding a legend inside box at the location (2,40) in graph coordinates.
+legend(1,30000,legend=c("loanDF3$ApplicantIncome" ,"loanDF3$CoapplicantIncome","loanDF3$CoapplicantIncome"), col=c("blue","red","black"), pch=c("o","*","+"),lty=c(1,2,3), ncol=1)
+
+
+
+```
+
+
+
+
+
+## Building Model Support Vector Machines(SVMs)
+
+
+```{r }
+library(caTools)
+library(party)
+library(e1071)
+library(kernlab)
+library(ROCR)
+
+set.seed(21532)
+
+
+#loanDF3 <- loanDF1 %>%
+#                   dplyr::select(ApplicantIncome, CoapplicantIncome,LoanAmount,Loan_Amount_Term, Loan_Status)
+
+#loanDF3 <- loanDF3 %>%
+#                   dplyr::select(ApplicantIncome, LoanAmount, Loan_Status)
+
+#View(loanDF2)
+#loanDF2$Loan_Status <- ifelse(loanDF2$Loan_Status == "Y", 1 , 0) 
+#glimpse(loanDF3)                   
+           
+#loanDF2$Married <- ifelse(loanDF2$Married == "Yes", 1 , 0) 
+#loanDF2$Loan_Status <- ifelse(loanDF2$Loan_Status == "Y", 1 , 0) 
+
+#View(loanDF3)
+
+data1 <- createDataPartition(y =loanDF3$Loan_Status, p= 0.7, list = FALSE)
+
+train1 <- loanDF3[data1,]
+test1 <- loanDF3[-data1,]
+
+#train1 <- as.data.frame(train1)
+#test1 <- as.data.frame(test1)
+
+#is.data.frame(data1)
+#is.data.frame(train1)
+#is.data.frame(loanDF3)
+
+
+
+dim(train1)
+dim(test1)
+
+anyNA(loanDF3)
+
+# Cross validation
+ctrl <- trainControl(method = "repeatedcv", 
+                     number = 10,
+                     repeats = 3)
+
+#ctrl <- trainControl(method="cv",
+#                     number = 2,
+#                     summaryFunction=twoClassSummary,
+#                     classProbs=TRUE)
+
+# Grid search to fine tune SVM
+grid <- expand.grid(C = c(0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 1, 1.1, 1.25,
+                          1.5, 1.75, 2, 2.25)
+                    )
+
+svm_linear <- train(Loan_Status ~.,
+                    data = train1, 
+                    method = "svmLinear",
+                    trControl = ctrl,
+                    preProcess = c("center", "scale"),
+                    #metric = "ROC",
+                    tuneGrid = grid,
+                    tuneLength = 10
+                    )
+
+svm_linear
+
+
+
+#data1 = sample.split(loanDF3, SplitRatio = 0.80)
+#train1 <- subset(loanDF3, data1 == TRUE)
+#test1 <- subset(loanDF3, data1 == FALSE)
+
+# Feature Scaling
+#train1[-3] = scale(train1[-3])
+#test1[-3] = scale(test1[-3])
+ 
+# Fitting SVM to the Training set
+#install.packages('e1071')
+# 
+# classifier = svm(formula = Loan_Status ~ .,
+# 				data = train1,
+# 				type = 'C-classification',
+# 				kernel = 'linear')
+# 
+# classifier
+
+
+```
+
+### Prediction of model SVM
+
+```{r }
+
+# Predicting the Test set results
+#pred1svm = predict(classifier, newdata = test1[-3])
+test_predi <- predict(svm_linear, newdata = test1)
+test_predi
+
+
+
+```
+
+### Making Confusion Matrix , Accuracy of Model 1
+
+```{r }
+
+# Making the Confusion Matrix
+#cm = table(test1[, 3], pred1svm)
+confusionMatrix(table(test_predi, test1$Loan_Status))
+
+# Another way of looking at model performance
+#Let see misclassification error
+predicted_table <- table(Predicted = test_predi, Actual = test1$Loan_Status)
+predicted_table
+
+#misclassification error rate
+1 - sum(diag(predicted_table))/sum(predicted_table)
+
+#Accuracy
+sum(diag(predicted_table))/sum(predicted_table)
+
+#str(loanDF2)
+
+# # load package
+# #install.packages("ggstatsplot")
+# library(ggstatsplot)
+# 
+# # correlogram
+# ggstatsplot::ggcorrmat(
+#   data = data1000R1,
+#   type = "parametric", # parametric for Pearson, nonparametric for Spearman's correlation
+#   colors = c("darkred", "white", "steelblue") # change default colors
+# )
+```
+
+
+### Visualizing the Training set results
+
+```{r }
+library (e1071)
+
+plot(svm_linear)
+
+#plot 2 dimensions with 5 variable
+svm_model <- svm(Loan_Status ~ ., data = loanDF3, kernel = "linear", cost = 10, scale = FALSE)
+summary(svm_model)
+plot(svm_model, formula = LoanAmount ~ Loan_Amount_Term, data=loanDF3)
+# plot(svm_linear, loanDF3, Loan_Status ~ LoanAmount,
+#      slice = list(ApplicantIncome = 3, CoapplicantIncome= 4, Loan_Amount_Term = 6))
+
+
+```
+
+
+## Decision Tree Model
+
+```{r, decision tree}
+library(rpart)
+library(rpart.plot)
+library(caret)
+
+model2 <- rpart(Loan_Status ~.,method="class", data=train1)
+
+rpart.plot(model2, tweak =1.6)
+
+cat("Visualizing the model")
+prp(model2)
+
+model2.pred <- predict(model2, test1, type="class")
+model2.accuracy <- table(test1$Loan_Status, model2.pred, dnn=c("Actual", "Predicted"))
+model2.accuracy
+
+confusionMatrix(predict(model2, type = "class"), train1$Loan_Status)
+
+
+```
+
+
+<!-- ```{r } -->
+
+<!-- #install.packages('ElemStatLearn') -->
+
+<!-- # Download package tarball from CRAN archive -->
+
+<!-- # url <- "https://cran.r-project.org/src/contrib/Archive/ElemStatLearn/ElemStatLearn_2015.6.26.2.tar.gz" -->
+<!-- # pkgFile <- "ElemStatLearn_2015.6.26.2.tar.gz" -->
+<!-- # download.file(url = url, destfile = pkgFile) -->
+<!-- #  -->
+<!-- # # Expand the zip file using whatever system functions are preferred -->
+<!-- #  -->
+<!-- # # look at the DESCRIPTION file in the expanded package directory -->
+<!-- #  -->
+<!-- # # Install dependencies list in the DESCRIPTION file -->
+<!-- #  -->
+<!-- # install.packages(c("ada", "ipred", "evd")) -->
+<!-- #  -->
+<!-- # # Install package -->
+<!-- # install.packages(pkgs=pkgFile, type="source", repos=NULL) -->
+<!-- #  -->
+<!-- # # Delete package tarball -->
+<!-- # unlink(pkgFile) -->
+<!-- #  -->
+
+
+<!-- # installing library ElemStatLearn -->
+<!-- # library(ElemStatLearn) -->
+<!-- #  -->
+<!-- # # Plotting the training data set results -->
+<!-- # set = train1 -->
+<!-- # X1 = seq(min(set[, 1]) - 1, max(set[, 1]) + 1, by = 10) -->
+<!-- # X2 = seq(min(set[, 2]) - 1, max(set[, 2]) + 1, by = 1000) -->
+<!-- #  -->
+<!-- # grid_set = expand.grid(X1, X2) -->
+<!-- # colnames(grid_set) = c('ApplicantIncome', 'LoanAmount') -->
+<!-- # y_grid = predict(classifier, newdata = grid_set) -->
+<!-- #  -->
+<!-- # plot(set[, -3], -->
+<!-- # 	main = 'SVM (Training set)', -->
+<!-- # 	xlab = 'ApplicantIncome', ylab = 'LoanAmount', -->
+<!-- # 	xlim = range(X1), ylim = range(X2)) -->
+<!-- #  -->
+<!-- # contour(X1, X2, matrix(as.numeric(y_grid), length(X1), length(X2)), add = TRUE) -->
+<!-- #  -->
+<!-- # points(grid_set, pch = '.', col = ifelse(y_grid == 1, 'coral1', 'aquamarine')) -->
+<!-- #  -->
+<!-- # points(set, pch = 21, bg = ifelse(set[, 3] == 1, 'green4', 'red3')) -->
+<!-- #  -->
+
+<!-- ``` -->
+
+
+<!-- ### Visualizing the Test set results -->
+
+<!-- ```{r } -->
+
+<!-- set = test1 -->
+<!-- X1 = seq(min(set[, 1]) - 1, max(set[, 1]) + 1, by = 0.01) -->
+<!-- X2 = seq(min(set[, 2]) - 1, max(set[, 2]) + 1, by = 0.01) -->
+
+<!-- grid_set = expand.grid(X1, X2) -->
+<!-- colnames(grid_set) = c('Age', 'EstimatedSalary') -->
+<!-- y_grid = predict(classifier, newdata = grid_set) -->
+
+<!-- plot(set[, -3], main = 'SVM (Test set)', -->
+<!-- 	xlab = 'Age', ylab = 'Loan Status', -->
+<!-- 	xlim = range(X1), ylim = range(X2)) -->
+
+<!-- contour(X1, X2, matrix(as.numeric(y_grid), length(X1), length(X2)), add = TRUE) -->
+
+<!-- points(grid_set, pch = '.', col = ifelse(y_grid == 1, 'coral1', 'aquamarine')) -->
+
+<!-- points(set, pch = 21, bg = ifelse(set[, 3] == 1, 'green4', 'red3')) -->
+
+
+<!-- ``` -->
+
+## Notes
+
+We selected numerical variables to build the two models (SVM and Decision Tree). We also transformed the target variables from character to factor('1', '0'). We encountered numerous issues trying to visualize the hyper-plane to see the boundary with SVM. Based on the referenced articles 2 and 3, SVM seems to be good at model accuracy. On this assignment, the decision tree appears to output the SVM. We are actually surprised by the misclassification error rate (31.15%) generated by SVM model. We know SVM uses the kernel to trick data with non-linearity to perform the learning algorithm on the model. Our dataset appears to be non-linear. Looking at the results for both models (decision tree and SVM), we can say decision tree performs better for classification model with 02 classes. We wonder how the two models will perform if we have more than 02 classes. In addition, we discover a data mining application called 'orange' for machine learning models. We will try and see if we get a different outcome.
+
+## References
+
+1- https://medium.com/@jackmaughan_50251/machine-learning-with-orange-8bc1a541a1d7
+
+2- https://www.hindawi.com/journals/complexity/2021/5550344/
+
+3- https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8137961/
+
+4- https://www.youtube.com/watch?v=RKZoJVMr6CU
+
+5- https://hastie.su.domains/ISLR2/ISLRv2_website.pdf
+
+
+
+
+
+
+
+
